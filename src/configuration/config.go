@@ -6,7 +6,6 @@ import (
 
 	"github.com/joho/godotenv"
 )
-
 type Config interface {
 	Get(key string) string
 }
