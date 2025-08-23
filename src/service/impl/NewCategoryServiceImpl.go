@@ -10,85 +10,73 @@ import (
 	"nextlend-api-web-frontend/src/service"
 )
 
-func NewCategoryServiceImpl(newsCategoryRepository *repository.NewsCategoryRepository) service.NewCategoryService {
-	return &newCategoryServiceImpl{NewsCategoryRepository: *newsCategoryRepository}
+func NewCategoryServiceImpl(newsCategoryRepository repository.NewsCategoryRepository) service.NewCategoryService {
+	return &newCategoryServiceImpl{NewsCategoryRepository: newsCategoryRepository}
 }
 
 type newCategoryServiceImpl struct {
 	repository.NewsCategoryRepository
 }
 
-func (service *newCategoryServiceImpl) Create(ctx context.Context, productModel model.ProductCreateOrUpdateModel) model.ProductCreateOrUpdateModel {
-	// common.Validate(productModel)
-	product := entity.NewsCategory{
-		Name: productModel.Name,
-	}
-	service.NewsCategoryRepository.Insert(ctx, product)
-	return productModel
+func (service *newCategoryServiceImpl) Create(ctx context.Context, category entity.NewsCategory) entity.NewsCategory {
+	// common.Validate(category)
+	result := service.NewsCategoryRepository.Insert(ctx, category)
+	return result
 }
 
-func (service *newCategoryServiceImpl) Update(ctx context.Context, productModel model.ProductCreateOrUpdateModel, id string) model.ProductCreateOrUpdateModel {
-	// common.Validate(productModel)
-	product := entity.NewsCategory{
-
-		Name: productModel.Name,
+func (service *newCategoryServiceImpl) Update(ctx context.Context, category entity.NewsCategory, id string) entity.NewsCategory {
+	// common.Validate(category)
+	// Set ID từ parameter
+	category.ID = uint(0) // Sẽ được set từ FindById
+	existingCategory, err := service.NewsCategoryRepository.FindById(ctx, id)
+	if err != nil {
+		panic(exception.NotFoundError{
+			Message: err.Error(),
+		})
 	}
-	service.NewsCategoryRepository.Update(ctx, product)
-	return productModel
+	category.ID = existingCategory.ID
+	result := service.NewsCategoryRepository.Update(ctx, category)
+	return result
 }
 
 func (service *newCategoryServiceImpl) Delete(ctx context.Context, id string) {
-	product, err := service.NewsCategoryRepository.FindById(ctx, id)
+	category, err := service.NewsCategoryRepository.FindById(ctx, id)
 	if err != nil {
 		panic(exception.NotFoundError{
 			Message: err.Error(),
 		})
 	}
-	service.NewsCategoryRepository.Delete(ctx, product)
+	service.NewsCategoryRepository.Delete(ctx, category)
 }
 
-func (service *newCategoryServiceImpl) FindById(ctx context.Context, id string) model.ProductModel {
-	productCache, err := service.NewsCategoryRepository.FindById(ctx, id)
-	if err != nil {
-		panic(exception.NotFoundError{
-			Message: err.Error(),
-		})
-	}
-	return model.ProductModel{
-		// Id:       productCache.Id.String(),
-		Name: productCache.Name,
-		// Price:    productCache.Price,
-		// Quantity: productCache.Quantity,
-	}
+func (service *newCategoryServiceImpl) FindById(ctx context.Context, id string) (entity.NewsCategory, error) {
+	return service.NewsCategoryRepository.FindById(ctx, id)
 }
 
-func (s *newCategoryServiceImpl) FindAll(ctx context.Context, req model.NewsCategorySearchRequest) []model.ProductModel {
-	products := s.NewsCategoryRepository.FindAll(ctx, req)
-	logger.Info("Find all products", products)
-	// Trường hợp không có dữ liệu thì trả luôn empty slice
-	if len(products) == 0 {
-		return []model.ProductModel{}
-	}
+func (service *newCategoryServiceImpl) FindAll(ctx context.Context, req model.NewsCategorySearchRequest) []entity.NewsCategory {
+	categories := service.NewsCategoryRepository.FindAll(ctx, req)
+	logger.Info("Find all categories", categories)
+	return categories
+}
 
-	// Map entity -> response model
-	responses := make([]model.ProductModel, 0, len(products))
-	for _, product := range products {
-		responses = append(responses, model.ProductModel{
-			Id:        product.ID,
-			Name:      product.Name,
-			Slug:      product.Slug,
-			ParentID:  product.ParentID,
-			SortOrder: product.SortOrder,
-			Status:    product.Status,
+func (service *newCategoryServiceImpl) FindAllFlat(ctx context.Context, req model.NewsCategorySearchRequest) []entity.NewsCategory {
+	return service.NewsCategoryRepository.FindAllFlat(ctx, req)
+}
 
-			Parent:   product.Parent,
-			Children: product.Children,
-			Posts:    product.Posts,
-			// Id:       product.Id.String(),
-			// Price:    product.Price,
-			// Quantity: product.Quantity,
-		})
-	}
+func (service *newCategoryServiceImpl) FindCategoryWithFullTree(ctx context.Context, id uint) (entity.NewsCategory, error) {
+	return service.NewsCategoryRepository.FindCategoryWithFullTree(ctx, id)
+}
 
-	return responses
+func (service *newCategoryServiceImpl) GetCategoryTreeWithDepth(ctx context.Context, maxDepth int) []entity.NewsCategory {
+	return service.NewsCategoryRepository.GetCategoryTreeWithDepth(ctx, maxDepth)
+}
+
+func (service *newCategoryServiceImpl) GetFormattedCategoryData(ctx context.Context) []map[string]interface{} {
+	categories := service.NewsCategoryRepository.FindAll(ctx, model.NewsCategorySearchRequest{})
+	return service.NewsCategoryRepository.FormatCategoryTree(categories)
+}
+
+func (service *newCategoryServiceImpl) GetCategoryTreeWithCustomDepth(ctx context.Context, maxDepth int) []map[string]interface{} {
+	categories := service.NewsCategoryRepository.GetCategoryTreeWithDepth(ctx, maxDepth)
+	return service.NewsCategoryRepository.FormatCategoryTree(categories)
 }
