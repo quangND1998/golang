@@ -9,6 +9,8 @@ import (
 	"nextlend-api-web-frontend/src/database"
 	"nextlend-api-web-frontend/src/exception"
 	"nextlend-api-web-frontend/src/middleware"
+
+	// "nextlend-api-web-frontend/src/model"
 	"os"
 	"os/signal"
 	"syscall"
@@ -35,7 +37,13 @@ func main() {
 	newCategoryController := controller.InitNewCategoryController(&mewCategoryService)
 	app.Use(recover.New())
 	app.Use(cors.New())
-	app.Use(middleware.LoggingMiddleware())
+	// Sử dụng middleware logging tối ưu cho performance
+	app.Use(middleware.LoggingMiddlewareMinimal())
+
+	app.Get("/hello-world", func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		      "msg": "hello-world"})
+	})
 	app.Get("/healthz", func(c *fiber.Ctx) error {
 		sqlConnections := database.ListConnections()
 		mongoConnections := database.ListMongoClients()

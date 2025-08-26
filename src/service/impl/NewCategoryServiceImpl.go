@@ -10,8 +10,8 @@ import (
 	"nextlend-api-web-frontend/src/service"
 )
 
-func NewCategoryServiceImpl(newsCategoryRepository repository.NewsCategoryRepository) service.NewCategoryService {
-	return &newCategoryServiceImpl{NewsCategoryRepository: newsCategoryRepository}
+func NewCategoryServiceImpl(newsCategoryRepository *repository.NewsCategoryRepository) service.NewCategoryService {
+	return &newCategoryServiceImpl{NewsCategoryRepository: *newsCategoryRepository}
 }
 
 type newCategoryServiceImpl struct {

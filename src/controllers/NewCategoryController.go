@@ -28,7 +28,6 @@ func (controller *NewCategoryController) Route(app *fiber.App) {
 
 func (controller *NewCategoryController) FindAll(c *fiber.Ctx) error {
 	var req model.NewsCategorySearchRequest
-
 	// parse query params vào struct
 	if err := c.QueryParser(&req); err != nil {
 		return response.BadRequest(c, "Invalid query parameters", err.Error())

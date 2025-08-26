@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// LoggingMiddleware tạo middleware logging cho Fiber
+// LoggingMiddleware tạo middleware logging cho Fiber - phiên bản tối ưu cho performance
 func LoggingMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Thời gian bắt đầu request
@@ -18,16 +18,57 @@ func LoggingMiddleware() fiber.Handler {
 		err := c.Next()
 
 		// Thời gian kết thúc request
-		end := time.Now()
-		duration := end.Sub(start)
+		duration := time.Since(start)
+
+		// Lấy thông tin request cơ bản
+		method := c.Method()
+		path := c.Path()
+		status := c.Response().StatusCode()
+		ip := c.IP()
+
+		// Chỉ log errors và warnings, bỏ qua successful requests để tăng performance
+		switch {
+		case status >= 500:
+			logger.Errorw("HTTP Request Error",
+				"method", method,
+				"path", path,
+				"status", status,
+				"duration", duration,
+				"ip", ip,
+				"error", err,
+			)
+		case status >= 400:
+			logger.Warnw("HTTP Request Warning",
+				"method", method,
+				"path", path,
+				"status", status,
+				"duration", duration,
+				"ip", ip,
+			)
+		// Bỏ qua logging cho successful requests (200-399) để tăng performance
+		}
+
+		return err
+	}
+}
+
+// LoggingMiddlewareVerbose tạo middleware logging chi tiết (chỉ dùng cho development)
+func LoggingMiddlewareVerbose() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Thời gian bắt đầu request
+		start := time.Now()
+
+		// Thực hiện request
+		err := c.Next()
+
+		// Thời gian kết thúc request
+		duration := time.Since(start)
 
 		// Lấy thông tin request
 		method := c.Method()
 		path := c.Path()
 		status := c.Response().StatusCode()
-		logger.Error("status: ", status)
 		ip := c.IP()
-		// userAgent := c.Get("User-Agent")
 
 		// Log theo level tùy theo status code
 		switch {
@@ -38,10 +79,7 @@ func LoggingMiddleware() fiber.Handler {
 				"status", status,
 				"duration", duration,
 				"ip", ip,
-				// "user_agent", userAgent,
 				"error", err,
-				"request", c.Request().Body(),
-				"response", c.Response().Body(),
 			)
 		case status >= 400:
 			logger.Warnw("HTTP Request Warning",
@@ -50,9 +88,6 @@ func LoggingMiddleware() fiber.Handler {
 				"status", status,
 				"duration", duration,
 				"ip", ip,
-				// "user_agent", userAgent,
-				"request", c.Request().Body(),
-				"response", c.Response().Body(),
 			)
 		default:
 			logger.Infow("HTTP Request",
@@ -61,10 +96,6 @@ func LoggingMiddleware() fiber.Handler {
 				"status", status,
 				"duration", duration,
 				"ip", ip,
-				// "user_agent", userAgent,
-				"query", c.Queries(),
-				"body", string(c.Body()),
-				"response", string(c.Response().Body()),
 			)
 		}
 
@@ -81,8 +112,7 @@ func LoggingMiddlewareWithLogger(log logger.Logger) fiber.Handler {
 		// Thực hiện request
 		err := c.Next()
 		// Thời gian kết thúc request
-		end := time.Now()
-		duration := end.Sub(start)
+		duration := time.Since(start)
 
 		// Lấy thông tin request
 		method := c.Method()
@@ -145,8 +175,7 @@ func LoggingMiddlewareWithContext() fiber.Handler {
 		err := c.Next()
 
 		// Thời gian kết thúc request
-		end := time.Now()
-		duration := end.Sub(start)
+		duration := time.Since(start)
 
 		// Lấy thông tin request
 		method := c.Method()
@@ -187,6 +216,89 @@ func LoggingMiddlewareWithContext() fiber.Handler {
 				"duration", duration,
 				"ip", ip,
 				"user_agent", userAgent,
+			)
+		}
+
+		return err
+	}
+}
+
+// LoggingMiddlewareProduction tạo middleware logging tối ưu cho production
+// Chỉ log errors và warnings, với sampling cho successful requests
+func LoggingMiddlewareProduction(sampleRate float64) fiber.Handler {
+	if sampleRate <= 0 || sampleRate > 1 {
+		sampleRate = 0.01 // 1% sampling mặc định
+	}
+	
+	return func(c *fiber.Ctx) error {
+		// Thời gian bắt đầu request
+		start := time.Now()
+
+		// Thực hiện request
+		err := c.Next()
+
+		// Thời gian kết thúc request
+		duration := time.Since(start)
+
+		// Lấy thông tin request cơ bản
+		method := c.Method()
+		path := c.Path()
+		status := c.Response().StatusCode()
+		ip := c.IP()
+
+		// Luôn log errors và warnings
+		switch {
+		case status >= 500:
+			logger.Errorw("HTTP Request Error",
+				"method", method,
+				"path", path,
+				"status", status,
+				"duration", duration,
+				"ip", ip,
+				"error", err,
+			)
+		case status >= 400:
+			logger.Warnw("HTTP Request Warning",
+				"method", method,
+				"path", path,
+				"status", status,
+				"duration", duration,
+				"ip", ip,
+			)
+		default:
+			// Sampling cho successful requests để giảm overhead
+			if duration > 100*time.Millisecond || // Log slow requests
+			   (method != "GET" && method != "HEAD") || // Log non-GET requests
+			   (sampleRate > 0 && float64(time.Now().UnixNano()%10000)/10000 < sampleRate) { // Random sampling
+				logger.Infow("HTTP Request",
+					"method", method,
+					"path", path,
+					"status", status,
+					"duration", duration,
+					"ip", ip,
+				)
+			}
+		}
+
+		return err
+	}
+}
+
+// LoggingMiddlewareMinimal tạo middleware logging tối thiểu - chỉ log errors
+func LoggingMiddlewareMinimal() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Thực hiện request
+		err := c.Next()
+
+		// Chỉ log errors
+		status := c.Response().StatusCode()
+		if status >= 500 {
+			logger.Errorw("HTTP Request Error",
+				"method", c.Method(),
+				"path", c.Path(),
+				"status", status,
+				"ip", c.IP(),
+				"error", err,
 			)
 		}
 
